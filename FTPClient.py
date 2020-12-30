@@ -1,19 +1,24 @@
 #!/usr/bin/python
 # ------------------------------------------------------------------+
-# Name: FTPClient.py                                                   |
+# Name: FTPClient.py                                               |
 # Autor: oTropicalista                                             |
 # Github: https://github.com/oTropicalista                         |
-# Repository: https://github.com/oTropicalista/****   |
+# Repository: https://github.com/oTropicalista/silver-enigma.git   |
 # Data: 12/11/2020                                                 |
 # ------------------------------------------------------------------+
 
 # To-do
-# Histórico de comandos
+# Histórico de comandos com FileHistoriry > prompt_toolkit.history
 
 import os
+import sys
+import getpass
 import argparse
 from configparser import ConfigParser
+from prompt_toolkit import prompt
 from ftplib import FTP
+from time import sleep
+import FTPUtils
 
 
 class color:
@@ -57,124 +62,73 @@ def readCmd(cmd):
     comm = array[0]
 
     if comm == "quit" or comm == "bye":
-        quitConn()
+        FTPUtils.quitConn(ftp)
     elif comm == "clear" or comm == "cls":
         clearTerm()
     elif comm == "ls":
-        listDir()
+        ret = FTPUtils.listDir(ftp, array[1:])
+        showTerm(ret)
     elif comm == "pwd":
-        workDir()
+        print(FTPUtils.workDir(ftp))
     elif comm == "cd":
-        changeDir(array[1])
+        res = FTPUtils.changeDir(ftp, array[1])
+        if res == False:
+            print(color.RED + color.BOLD + "[!] Não foi possível acessar o diretório {}".format(array[1]) + color.END)
     elif comm == "get":
-        getTextFile(array[1])
+        FTPUtils.getFile(ftp, array[1])
+    elif comm == "up":
+        res = FTPUtils.upFile(ftp, array[1])
+        if res == False:
+            print(color.RED + color.BOLD + "[!] Falha ao fazer upload do(s) arquivo(s) {}".format(array[1]) + color.END)
+        else:
+            print(color.GREEN + color.BOLD + "[*] Upload concluído do arquivo {}".format(array[1]) + color.END)
+    elif comm == "mkdir":
+        res = FTPUtils.makeDir(ftp, array[1])
+        if res == False:
+            print(color.RED + color.BOLD + "[!] Erro ao criar o diretório {}".format(array[1]) + color.END)
+        else:
+            print(color.GREEN + color.BOLD + "[*] Diretório criado {}".format(array[1]) + color.END)
 
-def changeWDir():
-    params.WDIR = ftp.pwd()
 
-def quitConn():
-    print("Fechando conexão...")
-    ftp.quit()
-    print("Bye")
-    exit()
+
+    elif comm == "reset":
+        resetSelf()
+
+def showTerm(obj):
+    for line in obj:
+        n = ' '.join(line)
+        print("- {}".format(n))
 
 def clearTerm():
     os.system("clear")
 
-def welcome():
-    ftp.getwelcome()
-
-
-def listDir():
-    list = []
-    ftp.retrlines('LIST', list.append)
-    for fl in list:
-        fl.split(' ')
-        print(fl)
-
-
-def changeDir(dst):
-    ftp.cwd(dst)
-    changeWDir()
-
-
-def getFile(filename):
-    try:
-        ftp.retrbinary("RETR" + filename, open(filename).write)
-    except:
-        print("Erro no getFile")
-
-
-def workDir():
-    wdir = ftp.pwd()
-    print(wdir)
-
-
-def makeDir(dirname):
-    try:
-        ftp.mkd(dirname)
-    except:
-        print("Erro ao criar o diretório {}".format(dirname))
-
-
-def getSizeText(name):
-    ftp.size(name)
-
-
-def getSizeBin(name):
-    ftp.sendcmd('TYPE I')  # for ASCII name
-    ftp.size(name)
-
-
-def getTextFile(name):
-    f_src = name
-    f_copy = name
-
-    try:
-        with open(f_copy, 'w') as fp:
-            res = ftp.retrlines('RETR' + f_src, fp.write)
-
-            if not res.startswith('226 Transfer complete'):
-                print("Download falido")
-                if os.path.isfile(f_copy):
-                    os.remove(f_copy)
-    except:
-        print("Erro no getTextFile")
-
-        if os.path.isfile(f_copy):
-            os.remove(f_copy)
-
-def upTextFile(name):
-    try:
-        with open(name, 'rb') as fp:
-            res = ftp.storlines("STOR " + name, fp)
-
-            if not res.startswith('226 Transfer complete'):
-                print("Erro no upload")
-    except:
-        print("Erro no upTextFile")
-
+def resetSelf():
+    os.execv(sys.executable, ['python'] + sys.argv)
 
 def init():
-    print(color.BLUE + color.BOLD + params.TITLE + color.END)
-    # ftp.retrlines('LIST')
-    # ftp.cwd("/dir")
-    welcome()
-    # list_dir()
+    print(FTPUtils.welcome(ftp))
     while True:
-        cmd = input("{} [{}] ".format(params.NAME, params.WDIR))
-        readCmd(cmd)
-
-    ftp.quit()
-
+        user_input = prompt(color.BLUE + "{}".format(params.NAME) + color.END + " [{}] ".format(FTPUtils.whereAmI(ftp)))
+        readCmd(user_input)
 
 if __name__ == "__main__":
-    try:
-        ftp = FTP('192.168.0.111')
-        ftp.login(params.USER, params.PASSWD)
-        print("Conectado a 192.168.0.111...")
-        changeWDir()
-    except:
-        print("Erro na conexão")
+    print(color.BLUE + color.BOLD + params.TITLE + color.END)
+    sleep(1)
+    if len(sys.argv) == 1:
+        user = getpass.getuser()
+        while True:
+            passwd = getpass.getpass(f"[+] Senha: ")
+        #user = input(color.BLUE + "[+] Usuário: " + color.END)
+        #sswd = color.BLUE + "[+] Senha:" + color.END
+        ftp = FTPUtils.conn(params.USER, params.PASSWD)
+    else:
+        if sys.argv[1] == "-d":
+            ftp = FTPUtils.conn(params.USER, params.PASSWD)
+        elif sys.argv[1] == "-l":
+            ftp = FTPUtils.conn(sys.argv[2], sys.argv[3])
 
+    print(color.BLUE + "[+] Conectando ao servidor FTP..." + color.END)
+    
+    if ftp == False:
+        print(color.RED + color.BOLD + "[!] Erro na conexão com o servidor" + color.END)
     init()
